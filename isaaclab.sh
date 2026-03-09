@@ -12,8 +12,8 @@
 # Exits if error occurs
 set -e
 
-# Set tab-spaces
-tabs 4
+# Set tab-spaces (skip in dumb terminals, e.g. Cursor IDE)
+tabs 4 2>/dev/null || true
 
 # get source directory
 export ISAACLAB_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"

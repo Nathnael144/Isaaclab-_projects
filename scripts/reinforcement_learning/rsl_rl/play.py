@@ -106,7 +106,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
             return
     elif args_cli.checkpoint:
-        resume_path = retrieve_file_path(args_cli.checkpoint)
+        # If load_run is set, resolve checkpoint under the run directory; otherwise try retrieve_file_path (full path or asset)
+        if agent_cfg.load_run is not None:
+            resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, args_cli.checkpoint)
+        else:
+            resume_path = retrieve_file_path(args_cli.checkpoint)
     else:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
