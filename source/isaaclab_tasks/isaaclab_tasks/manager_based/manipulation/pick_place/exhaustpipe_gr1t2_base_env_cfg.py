@@ -17,6 +17,7 @@ from isaaclab.managers import ActionTermCfg, SceneEntityCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import CameraCfg
@@ -210,6 +211,47 @@ class ObservationsCfg:
 
 
 @configclass
+class ObservationsStateOnlyCfg:
+    """Proprio + EE state only (no onboard camera), concatenated for RSL-RL MLP policies."""
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+        """Observations for policy group with state values."""
+
+        actions = ObsTerm(func=mdp.last_action)
+        robot_joint_pos = ObsTerm(
+            func=base_mdp.joint_pos,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
+
+        left_eef_pos = ObsTerm(func=mdp.get_eef_pos, params={"link_name": "left_hand_roll_link"})
+        left_eef_quat = ObsTerm(func=mdp.get_eef_quat, params={"link_name": "left_hand_roll_link"})
+        right_eef_pos = ObsTerm(func=mdp.get_eef_pos, params={"link_name": "right_hand_roll_link"})
+        right_eef_quat = ObsTerm(func=mdp.get_eef_quat, params={"link_name": "right_hand_roll_link"})
+
+        hand_joint_state = ObsTerm(func=mdp.get_robot_joint_state, params={"joint_names": ["R_.*", "L_.*"]})
+        head_joint_state = ObsTerm(
+            func=mdp.get_robot_joint_state,
+            params={"joint_names": ["head_pitch_joint", "head_roll_joint", "head_yaw_joint"]},
+        )
+
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class RewardsCfg:
+    """Shaped rewards for RSL-RL."""
+
+    progress = RewTerm(func=mdp.exhaust_pipe_shaping_reward, weight=2.0)
+    task_success = RewTerm(func=mdp.exhaust_pipe_success_reward, weight=100.0)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+
+
+@configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
 
@@ -258,7 +300,7 @@ class ExhaustPipeGR1T2BaseEnvCfg(ManagerBasedRLEnvCfg):
 
     # Unused managers
     commands = None
-    rewards = None
+    rewards: RewardsCfg = RewardsCfg()
     curriculum = None
 
     # Position of the XR anchor in the world frame

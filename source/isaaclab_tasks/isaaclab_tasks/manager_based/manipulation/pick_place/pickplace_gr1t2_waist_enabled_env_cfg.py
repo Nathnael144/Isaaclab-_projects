@@ -12,7 +12,14 @@ from isaaclab.devices.openxr.retargeters.humanoid.fourier.gr1t2_retargeter impor
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils import configclass
 
-from .pickplace_gr1t2_env_cfg import ActionsCfg, EventCfg, ObjectTableSceneCfg, ObservationsCfg, TerminationsCfg
+from .pickplace_gr1t2_env_cfg import (
+    ActionsCfg,
+    EventCfg,
+    ObjectTableSceneCfg,
+    ObservationsCfg,
+    RewardsCfg,
+    TerminationsCfg,
+)
 
 
 @configclass
@@ -30,7 +37,7 @@ class PickPlaceGR1T2WaistEnabledEnvCfg(ManagerBasedRLEnvCfg):
 
     # Unused managers
     commands = None
-    rewards = None
+    rewards: RewardsCfg = RewardsCfg()
     curriculum = None
 
     # Position of the XR anchor in the world frame

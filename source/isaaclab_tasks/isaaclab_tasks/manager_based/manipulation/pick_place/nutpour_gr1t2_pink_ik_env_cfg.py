@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from pink.tasks import DampingTask, FrameTask
+from isaaclab.controllers.pink_ik.local_frame_task import LocalFrameTask
 
 import carb
 
@@ -82,22 +82,21 @@ class NutPourGR1T2PinkIKEnvCfg(NutPourGR1T2BaseEnvCfg):
                 # Determines whether Pink IK solver will fail due to a joint limit violation
                 fail_on_joint_limit_violation=False,
                 variable_input_tasks=[
-                    FrameTask(
+                    LocalFrameTask(
                         "GR1T2_fourier_hand_6dof_left_hand_pitch_link",
+                        base_link_frame_name="base_link",
                         position_cost=8.0,  # [cost] / [m]
                         orientation_cost=1.0,  # [cost] / [rad]
                         lm_damping=10,  # dampening for solver for step jumps
                         gain=0.5,
                     ),
-                    FrameTask(
+                    LocalFrameTask(
                         "GR1T2_fourier_hand_6dof_right_hand_pitch_link",
+                        base_link_frame_name="base_link",
                         position_cost=8.0,  # [cost] / [m]
                         orientation_cost=1.0,  # [cost] / [rad]
                         lm_damping=10,  # dampening for solver for step jumps
                         gain=0.5,
-                    ),
-                    DampingTask(
-                        cost=0.5,  # [cost] * [s] / [rad]
                     ),
                     NullSpacePostureTask(
                         cost=0.2,

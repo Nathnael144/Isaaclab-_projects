@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC  -O3 -DNDEBUG "CMakeFiles/casadi-cli.dir/casadi_cli.cpp.o" -o ../../bin/casadi-cli  -Wl,-rpath,/home/nathan/IsaacLab/.casadi-build/lib:: ../../lib/libcasadi.so.3.7 -ldl 

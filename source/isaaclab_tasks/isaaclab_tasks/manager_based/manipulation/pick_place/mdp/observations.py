@@ -80,7 +80,6 @@ def get_robot_joint_state(
 def get_all_robot_link_state(
     env: ManagerBasedRLEnv,
 ) -> torch.Tensor:
-    body_pos_w = env.scene["robot"].data.body_link_state_w[:, :, :]
-    all_robot_link_pos = body_pos_w
-
-    return all_robot_link_pos
+    """Flatten per-link link state to (num_envs, -1) for observation concatenation."""
+    body_link_state_w = env.scene["robot"].data.body_link_state_w
+    return body_link_state_w.reshape(env.num_envs, -1)

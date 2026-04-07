@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: MIT
 """TurtleBot3 Burger robot configuration for Isaac Lab.
 
-Defines the ArticulationCfg for the TurtleBot3 Burger differential-drive robot
-using the pre-converted USD file.
+Defines the ArticulationCfg for the TurtleBot3 Burger differential-drive robot.
+Uses a self-contained USD with physics parameters copied exactly from the
+original URDF converter output, plus simple geometric visual primitives for
+viewport visibility.  No composition arcs or external references.
 """
 
 from __future__ import annotations
@@ -15,10 +17,10 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 # ---------------------------------------------------------------------------
-# Path to the TurtleBot3 Burger USD file (pre-converted from URDF)
+# Path to the clean TurtleBot3 Burger USD
 # ---------------------------------------------------------------------------
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_TURTLEBOT3_USD = os.path.join(
+TURTLEBOT3_USD_PATH: str = os.path.normpath(os.path.join(
     _THIS_DIR,
     os.pardir,
     os.pardir,
@@ -27,8 +29,7 @@ _TURTLEBOT3_USD = os.path.join(
     "urdf",
     "turtlebot3_burger",
     "turtlebot3_burger.usd",
-)
-TURTLEBOT3_USD_PATH: str = os.path.normpath(_TURTLEBOT3_USD)
+))
 
 # ---------------------------------------------------------------------------
 # Physical constants (from URDF)
@@ -54,7 +55,6 @@ TURTLEBOT3_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
-            # Add 1 velocity iteration for more stable wheel dynamics at higher speed.
             solver_position_iteration_count=4,
             solver_velocity_iteration_count=1,
             sleep_threshold=0.005,
@@ -70,13 +70,12 @@ TURTLEBOT3_CFG = ArticulationCfg(
         },
     ),
     actuators={
-            "wheels": ImplicitActuatorCfg(
-                joint_names_expr=["a__namespace_wheel_left_joint", "a__namespace_wheel_right_joint"],
-                effort_limit_sim=10.0,  # Increased effort limit for reliable movement
-                velocity_limit_sim=30.0,  # Increased velocity limit (rad/s)
-                stiffness=0.0,  # Velocity control → no position stiffness
-                # Lower damping (1–2) lets wheels reach target velocity faster.
-                damping=1.5,
-            ),
+        "wheels": ImplicitActuatorCfg(
+            joint_names_expr=["a__namespace_wheel_left_joint", "a__namespace_wheel_right_joint"],
+            effort_limit_sim=10.0,
+            velocity_limit_sim=30.0,
+            stiffness=0.0,      # Velocity control → no position stiffness
+            damping=1.5,
+        ),
     },
 )

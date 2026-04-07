@@ -16,6 +16,14 @@ import numpy as np
 from isaaclab.utils import configclass
 
 
+def default_anchor_rotation_custom_func(headpose: np.ndarray, primpose: np.ndarray) -> np.ndarray:
+    """Default CUSTOM anchor rotation function.
+
+    Returns an identity quaternion ([1, 0, 0, 0]) in ([w, x, y, z]) format.
+    """
+    return np.array([1, 0, 0, 0], dtype=np.float64)
+
+
 class XrAnchorRotationMode(enum.Enum):
     """Enumeration for XR anchor rotation modes."""
 
@@ -80,9 +88,7 @@ class XrCfg:
     Typical useful range: 0.3 – 1.5 seconds depending on runtime frame-rate and comfort.
     """
 
-    anchor_rotation_custom_func: Callable[[np.ndarray, np.ndarray], np.ndarray] = lambda headpose, primpose: np.array(
-        [1, 0, 0, 0], dtype=np.float64
-    )
+    anchor_rotation_custom_func: Callable[[np.ndarray, np.ndarray], np.ndarray] = default_anchor_rotation_custom_func
     """Specifies the function to calculate the rotation of the XR anchor when anchor_rotation_mode is CUSTOM.
 
     Args:

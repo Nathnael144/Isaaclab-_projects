@@ -602,8 +602,8 @@ class Stage2EventsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             # Always reset the robot back to the initial position at the origin.
-            # z is taken from the robot's default root state (typically ~0.05 m).
-            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)},
+            # Force a small z offset so the robot settles onto the ground plane.
+            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.05, 0.05), "yaw": (0.0, 0.0)},
             "velocity_range": {},
         },
     )

@@ -57,23 +57,54 @@ class PinkKinematicsConfiguration(Configuration):
         self._controlled_joint_names = controlled_joint_names
 
         # Build robot model with all joints
-        if mesh_path:
-            self.robot_wrapper = RobotWrapper.BuildFromURDF(urdf_path, mesh_path)
-        else:
-            self.robot_wrapper = RobotWrapper.BuildFromURDF(urdf_path)
+        try:
+            if mesh_path:
+                self.robot_wrapper = RobotWrapper.BuildFromURDF(urdf_path, mesh_path)
+            else:
+                self.robot_wrapper = RobotWrapper.BuildFromURDF(urdf_path)
+        except ValueError as e:
+            # Pinocchio may fail when loading geometry if the generated mesh assets are empty/missing.
+            # Pink IK only requires kinematics; fall back to a geometry-free model in that case.
+            msg = str(e)
+            if "No meshes found" not in msg:
+                raise
+            model = pin.buildModelFromUrdf(urdf_path)
+            self.robot_wrapper = RobotWrapper(model)
         self.full_model = self.robot_wrapper.model
         self.full_data = self.robot_wrapper.data
         self.full_q = self.robot_wrapper.q0
 
-        # import pdb; pdb.set_trace()
-        self._all_joint_names = self.full_model.names.tolist()[1:]
+        # Extract joint names from Pinocchio model.
+        # On some builds (notably some minimal pinocchio wheels), `model.names` isn't exposed to Python.
+        # In that case, we fall back to controlling only the provided joints and skip full-model bookkeeping.
+        self._has_full_model_joint_list = True
+        try:
+            self._all_joint_names = list(self.full_model.names)[1:]
+        except Exception:
+            self._has_full_model_joint_list = False
+            self._all_joint_names = list(self._controlled_joint_names)
         # controlled_joint_indices: indices in all_joint_names for joints that are in controlled_joint_names,
         # preserving all_joint_names order
-        self._controlled_joint_indices = [
-            idx for idx, joint_name in enumerate(self._all_joint_names) if joint_name in self._controlled_joint_names
-        ]
+        if self._has_full_model_joint_list:
+            self._controlled_joint_indices = [
+                idx
+                for idx, joint_name in enumerate(self._all_joint_names)
+                if joint_name in self._controlled_joint_names
+            ]
+        else:
+            self._controlled_joint_indices = list(range(len(self._controlled_joint_names)))
 
         # Build the reduced model with only the controlled joints
+        if not self._has_full_model_joint_list:
+            # We cannot build a reduced model without being able to enumerate all joints reliably.
+            self.controlled_model = self.full_model
+            self.controlled_data = self.full_data
+            self.controlled_q = self.full_q
+            super().__init__(
+                self.controlled_model, self.controlled_data, self.controlled_q, copy_data, forward_kinematics
+            )
+            return
+
         joints_to_lock = []
         for joint_name in self._all_joint_names:
             if joint_name not in self._controlled_joint_names:
@@ -101,6 +132,11 @@ class PinkKinematicsConfiguration(Configuration):
         Args:
             q: New configuration vector.
         """
+        if not getattr(self, "_has_full_model_joint_list", True):
+            # Fallback mode: only maintain the kinematics state tracked by Pink/controlled model.
+            super().update(q if q is not None else None)
+            return
+
         if q is not None and len(q) != len(self._all_joint_names):
             raise ValueError("q must have the same length as the number of joints in the model")
         if q is not None:

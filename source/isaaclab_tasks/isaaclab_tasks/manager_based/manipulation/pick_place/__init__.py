@@ -7,11 +7,14 @@ import gymnasium as gym
 
 from . import agents
 
+_RSL_RL_AGENT = f"{agents.__name__}.rsl_rl_ppo_cfg:PickPlaceManipulationPPORunnerCfg"
+
 gym.register(
     id="Isaac-PickPlace-GR1T2-Abs-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.pickplace_gr1t2_env_cfg:PickPlaceGR1T2EnvCfg",
+        "rsl_rl_cfg_entry_point": _RSL_RL_AGENT,
         "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
     },
     disable_env_checker=True,
@@ -28,6 +31,17 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-NutPour-GR1T2-Pink-IK-Abs-RL-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.nutpour_gr1t2_pink_ik_rl_env_cfg:NutPourGR1T2PinkIKRLEnvCfg",
+        "rsl_rl_cfg_entry_point": _RSL_RL_AGENT,
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_image_nut_pouring.json",
+    },
+    disable_env_checker=True,
+)
+
+gym.register(
     id="Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
@@ -38,10 +52,22 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-RL-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.exhaustpipe_gr1t2_pink_ik_rl_env_cfg:ExhaustPipeGR1T2PinkIKRLEnvCfg",
+        "rsl_rl_cfg_entry_point": _RSL_RL_AGENT,
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_image_exhaust_pipe.json",
+    },
+    disable_env_checker=True,
+)
+
+gym.register(
     id="Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.pickplace_gr1t2_waist_enabled_env_cfg:PickPlaceGR1T2WaistEnabledEnvCfg",
+        "rsl_rl_cfg_entry_point": _RSL_RL_AGENT,
         "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
     },
     disable_env_checker=True,
@@ -52,6 +78,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.pickplace_unitree_g1_inspire_hand_env_cfg:PickPlaceG1InspireFTPEnvCfg",
+        "rsl_rl_cfg_entry_point": _RSL_RL_AGENT,
         "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
     },
     disable_env_checker=True,

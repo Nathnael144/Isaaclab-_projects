@@ -90,17 +90,20 @@ def goal_position_in_robot_frame(
     return torch.stack([goal_body_x, goal_body_y], dim=-1)  # (N, 2)
 
 
-def lidar_scan(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("lidar")) -> torch.Tensor:
+def lidar_scan(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("lidar"), max_distance: float = 3.5) -> torch.Tensor:
     """Returns 1-D lidar range readings from a RayCaster sensor.  Shape: (N, num_rays).
 
-    The output is the Euclidean distance per ray, clipped to [0, max_distance].
+    The output is the Euclidean distance per ray, clamped to [0, max_distance].
+    Rays that miss all geometry return max_distance (not inf).
     """
     sensor = env.scene[sensor_cfg.name]
     # ray_hits_w is (N, num_rays, 3) — the world hit positions
-    # For invalid (miss) hits, distance == max_distance
+    # For invalid (miss) hits, distance can be inf
     hits = sensor.data.ray_hits_w  # (N, num_rays, 3)
     origin = sensor.data.pos_w.unsqueeze(1)  # (N, 1, 3)
     distances = torch.norm(hits - origin, dim=-1)  # (N, num_rays)
+    # Clamp to finite range so downstream MLP layers don't see inf
+    distances = distances.clamp(max=max_distance)
     return distances
 
 

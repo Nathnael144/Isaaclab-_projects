@@ -1,0 +1,2 @@
+# Empty dependencies file for pinocchio-test-cpp-rnea-second-order-derivatives.
+# This may be replaced when dependencies are built.

@@ -7,3 +7,5 @@
 """This sub-module contains the functions that are specific to the locomanipulation environments."""
 
 from .tracking import *  # noqa
+from .pick_place import *  # noqa
+from .warehouse_box_arrange import *  # noqa

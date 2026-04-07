@@ -53,25 +53,22 @@ from turtlebot3_isaaclab.stages.stage2_static_env_cfg import Stage2EnvCfg  # noq
 from isaaclab.envs import ManagerBasedRLEnv  # noqa: E402
 import isaaclab.sim as sim_utils  # noqa: E402
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg  # noqa: E402
+from turtlebot3_isaaclab.goal_visual import update_goal_marker  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Goal-marker config (bright green disc, created lazily after sim starts)
-# ---------------------------------------------------------------------------
-_GOAL_MARKER_CFG = VisualizationMarkersCfg(
-    prim_path="/Visuals/GoalMarkers",
+_ROBOT_MARKER_CFG = VisualizationMarkersCfg(
+    prim_path="/Visuals/RobotMarker",
     markers={
-        "goal": sim_utils.CylinderCfg(
-            radius=0.25,
-            height=0.05,
+        "robot": sim_utils.SphereCfg(
+            radius=0.10,
             visual_material=sim_utils.PreviewSurfaceCfg(
-                diffuse_color=(0.0, 1.0, 0.0),
-                emissive_color=(0.0, 0.4, 0.0),
+                diffuse_color=(0.0, 0.75, 1.0),
+                emissive_color=(0.0, 0.2, 0.3),
                 opacity=0.9,
             ),
         ),
     },
 )
-_goal_marker: VisualizationMarkers | None = None
+_robot_marker: VisualizationMarkers | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -89,20 +86,31 @@ def _get_base(env) -> ManagerBasedRLEnv:
 
 def _sample_goals(env) -> None:
     """Sample a random goal for every env and move the green goal markers."""
-    global _goal_marker
     base = _get_base(env)
+
+    if base.num_envs == 0:
+        return
 
     goal = base.scene.env_origins[:, :2].clone()
     goal[:, 0] += torch.empty(base.num_envs, device=base.device).uniform_(-2.0, 2.0)
     goal[:, 1] += torch.empty(base.num_envs, device=base.device).uniform_(-2.0, 2.0)
     base.goal_pos = goal  # (N, 2)
 
-    # Lazily create the marker prim (sim must be running)
-    if _goal_marker is None:
-        _goal_marker = VisualizationMarkers(_GOAL_MARKER_CFG)
+    # Delegate to goal_visual so only one marker prim is ever created
+    update_goal_marker(base)
 
-    z = torch.full((base.num_envs, 1), 0.03, device=goal.device)
-    _goal_marker.visualize(translations=torch.cat([goal, z], dim=-1))
+
+def _update_robot_marker(env) -> None:
+    """Update a bright marker at robot position for easy viewport tracking."""
+    global _robot_marker
+    base = _get_base(env)
+    if _robot_marker is None:
+        _robot_marker = VisualizationMarkers(_ROBOT_MARKER_CFG)
+    robot_pos = base.scene["robot"].data.root_pos_w[:, :3].clone()
+    if robot_pos.shape[0] == 0:
+        return  # No envs — nothing to visualize
+    robot_pos[:, 2] += 0.15
+    _robot_marker.visualize(translations=robot_pos)
 
 
 # =========================================================================
@@ -112,6 +120,7 @@ def _sample_goals(env) -> None:
 def run_verify(env) -> None:
     base = _get_base(env)
     _sample_goals(env)
+    _update_robot_marker(env)
     action_dim = env.action_space.shape[-1]
 
     for step in range(300):
@@ -122,6 +131,7 @@ def run_verify(env) -> None:
             actions[:, 0] = 0.5
 
         obs, rew, term, trunc, info = env.step(actions)
+        _update_robot_marker(env)
         if (term | trunc).any():
             _sample_goals(env)
 
@@ -142,7 +152,7 @@ def run_verify(env) -> None:
 # Training mode — RSL-RL PPO
 # =========================================================================
 
-def run_train(env, max_iters: int) -> None:
+def run_train(env, max_iters: int, resume_ckpt: str | None = None) -> None:
     try:
         from rsl_rl.runners import OnPolicyRunner
     except ImportError:
@@ -168,8 +178,8 @@ def run_train(env, max_iters: int) -> None:
     policy_cfg = {
         "class_name": "ActorCritic",
         "init_noise_std": 1.0,
-        "actor_hidden_dims": [256, 256, 128],
-        "critic_hidden_dims": [256, 256, 128],
+        "actor_hidden_dims": [128, 128],
+        "critic_hidden_dims": [128, 128],
         "activation": "elu",
     }
     algorithm_cfg = {
@@ -220,6 +230,14 @@ def run_train(env, max_iters: int) -> None:
     rsl_env = _SafeWrapper(RslRlVecEnvWrapper(env))
 
     runner = OnPolicyRunner(rsl_env, runner_cfg, log_dir="logs/stage2", device=base.device)
+
+    if resume_ckpt is not None:
+        if not os.path.isfile(resume_ckpt):
+            print(f"[Stage 2 — train] Resume checkpoint not found: {resume_ckpt}")
+            return
+        runner.load(resume_ckpt)
+        print(f"[Stage 2 — train] Resumed from checkpoint: {resume_ckpt}")
+
     print(f"\n[Stage 2 — train] Starting PPO for {max_iters} iterations …\n")
     runner.learn(num_learning_iterations=max_iters)
     print("\n[Stage 2 — train] Training complete.\n")
@@ -238,6 +256,7 @@ def run_eval(env, ckpt: str) -> None:
 
     base = _get_base(env)
     _sample_goals(env)
+    _update_robot_marker(env)
 
     # Get one observation to infer the ActorCritic input structure.
     obs, _ = env.reset()
@@ -264,12 +283,22 @@ def run_eval(env, ckpt: str) -> None:
     policy.load_state_dict(state["model_state_dict"])
     policy.eval()
 
+    def _sanitize_obs(o):
+        """Replace NaN/inf in observations with 0, matching training wrapper."""
+        if isinstance(o, dict):
+            return {k: torch.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0) for k, v in o.items()}
+        return torch.nan_to_num(o, nan=0.0, posinf=0.0, neginf=0.0)
+
+    obs = _sanitize_obs(obs)
+
     for step in range(1000):
         with torch.no_grad():
             # ActorCritic expects the full observation TensorDict and uses
             # obs_groups to select the "policy" keys internally.
             actions = policy.act_inference(obs)
         obs, rew, term, trunc, info = env.step(actions)
+        obs = _sanitize_obs(obs)
+        _update_robot_marker(env)
         if (term | trunc).any():
             _sample_goals(env)
 
@@ -323,7 +352,7 @@ def main() -> None:
     if args.mode == "verify":
         run_verify(env)
     elif args.mode == "train":
-        run_train(env, args.max_iterations)
+        run_train(env, args.max_iterations, args.checkpoint)
     elif args.mode == "eval":
         if args.checkpoint is None:
             print("ERROR: --checkpoint required for eval mode.")

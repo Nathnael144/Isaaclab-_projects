@@ -55,7 +55,9 @@ def register_task_to_hydra(
     # replace slices with strings because OmegaConf does not support slices
     cfg_dict = replace_slices_with_strings(cfg_dict)
     # store the configuration to Hydra
-    ConfigStore.instance().store(name=task_name, node=cfg_dict)
+    # NOTE: Some configs (e.g. Pink IK tasks) may contain non-primitive Python objects
+    # (like numpy arrays). We allow objects in the OmegaConf node so Hydra can store them.
+    ConfigStore.instance().store(name=task_name, node=OmegaConf.create(cfg_dict, flags={"allow_objects": True}))
     return env_cfg, agent_cfg
 
 

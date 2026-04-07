@@ -5,7 +5,7 @@
 import tempfile
 
 import torch
-from pink.tasks import FrameTask
+from isaaclab.controllers.pink_ik.local_frame_task import LocalFrameTask
 
 import carb
 
@@ -22,6 +22,7 @@ from isaaclab.envs.mdp.actions.pink_actions_cfg import PinkInverseKinematicsActi
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
@@ -174,15 +175,17 @@ class ActionsCfg:
             show_ik_warnings=False,
             fail_on_joint_limit_violation=False,
             variable_input_tasks=[
-                FrameTask(
+                LocalFrameTask(
                     "g1_29dof_rev_1_0_left_wrist_yaw_link",
+                    base_link_frame_name="pelvis",
                     position_cost=8.0,  # [cost] / [m]
                     orientation_cost=2.0,  # [cost] / [rad]
                     lm_damping=10,  # dampening for solver for step jumps
                     gain=0.5,
                 ),
-                FrameTask(
+                LocalFrameTask(
                     "g1_29dof_rev_1_0_right_wrist_yaw_link",
+                    base_link_frame_name="pelvis",
                     position_cost=8.0,  # [cost] / [m]
                     orientation_cost=2.0,  # [cost] / [rad]
                     lm_damping=10,  # dampening for solver for step jumps
@@ -249,10 +252,27 @@ class ObservationsCfg:
 
         def __post_init__(self):
             self.enable_corruption = False
-            self.concatenate_terms = False
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class RewardsCfg:
+    """Shaped rewards for RSL-RL (also harmless for teleop / logging)."""
+
+    reach_shape = RewTerm(
+        func=mdp.object_right_eef_distance_exp,
+        params={"eef_link_name": "right_wrist_yaw_link", "std": 0.12},
+        weight=1.0,
+    )
+    task_success = RewTerm(
+        func=mdp.pick_place_success_reward,
+        params={"task_link_name": "right_wrist_yaw_link"},
+        weight=50.0,
+    )
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
 
 
 @configclass
@@ -303,7 +323,7 @@ class PickPlaceG1InspireFTPEnvCfg(ManagerBasedRLEnvCfg):
 
     # Unused managers
     commands = None
-    rewards = None
+    rewards: RewardsCfg = RewardsCfg()
     curriculum = None
 
     # Position of the XR anchor in the world frame

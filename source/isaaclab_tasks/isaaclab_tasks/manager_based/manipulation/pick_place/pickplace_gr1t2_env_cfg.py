@@ -6,23 +6,22 @@
 import tempfile
 
 import torch
-from pink.tasks import DampingTask, FrameTask
+from isaaclab.controllers.pink_ik.local_frame_task import LocalFrameTask
 
 import carb
 
-import isaaclab.controllers.utils as ControllerUtils
 import isaaclab.envs.mdp as base_mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
-from isaaclab.controllers.pink_ik import NullSpacePostureTask, PinkIKControllerCfg
+from isaaclab.envs.mdp.actions.actions_cfg import JointPositionActionCfg
 from isaaclab.devices.device_base import DevicesCfg
 from isaaclab.devices.openxr import ManusViveCfg, OpenXRDeviceCfg, XrCfg
 from isaaclab.devices.openxr.retargeters.humanoid.fourier.gr1t2_retargeter import GR1T2RetargeterCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.envs.mdp.actions.pink_actions_cfg import PinkInverseKinematicsActionCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
@@ -118,106 +117,29 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    upper_body_ik = PinkInverseKinematicsActionCfg(
-        pink_controlled_joint_names=[
-            "left_shoulder_pitch_joint",
-            "left_shoulder_roll_joint",
-            "left_shoulder_yaw_joint",
-            "left_elbow_pitch_joint",
-            "left_wrist_yaw_joint",
-            "left_wrist_roll_joint",
-            "left_wrist_pitch_joint",
-            "right_shoulder_pitch_joint",
-            "right_shoulder_roll_joint",
-            "right_shoulder_yaw_joint",
-            "right_elbow_pitch_joint",
-            "right_wrist_yaw_joint",
-            "right_wrist_roll_joint",
-            "right_wrist_pitch_joint",
-        ],
-        hand_joint_names=[
-            "L_index_proximal_joint",
-            "L_middle_proximal_joint",
-            "L_pinky_proximal_joint",
-            "L_ring_proximal_joint",
-            "L_thumb_proximal_yaw_joint",
-            "R_index_proximal_joint",
-            "R_middle_proximal_joint",
-            "R_pinky_proximal_joint",
-            "R_ring_proximal_joint",
-            "R_thumb_proximal_yaw_joint",
-            "L_index_intermediate_joint",
-            "L_middle_intermediate_joint",
-            "L_pinky_intermediate_joint",
-            "L_ring_intermediate_joint",
-            "L_thumb_proximal_pitch_joint",
-            "R_index_intermediate_joint",
-            "R_middle_intermediate_joint",
-            "R_pinky_intermediate_joint",
-            "R_ring_intermediate_joint",
-            "R_thumb_proximal_pitch_joint",
-            "L_thumb_distal_joint",
-            "R_thumb_distal_joint",
-        ],
-        target_eef_link_names={
-            "left_wrist": "left_hand_pitch_link",
-            "right_wrist": "right_hand_pitch_link",
-        },
-        # the robot in the sim scene we are controlling
+    # NOTE: We intentionally avoid Pink IK here because the Isaac Sim bundled pinocchio bindings
+    # can be missing converters required by Pink (std::vector<bool>, std::vector<string>, etc.).
+    # Joint-space control is sufficient for starting RL training.
+    upper_body_joint_pos = JointPositionActionCfg(
         asset_name="robot",
-        # Configuration for the IK controller
-        # The frames names are the ones present in the URDF file
-        # The urdf has to be generated from the USD that is being used in the scene
-        controller=PinkIKControllerCfg(
-            articulation_name="robot",
-            base_link_name="base_link",
-            num_hand_joints=22,
-            show_ik_warnings=False,
-            # Determines whether Pink IK solver will fail due to a joint limit violation
-            fail_on_joint_limit_violation=False,
-            variable_input_tasks=[
-                FrameTask(
-                    "GR1T2_fourier_hand_6dof_left_hand_pitch_link",
-                    position_cost=8.0,  # [cost] / [m]
-                    orientation_cost=1.0,  # [cost] / [rad]
-                    lm_damping=12,  # dampening for solver for step jumps
-                    gain=0.5,
-                ),
-                FrameTask(
-                    "GR1T2_fourier_hand_6dof_right_hand_pitch_link",
-                    position_cost=8.0,  # [cost] / [m]
-                    orientation_cost=1.0,  # [cost] / [rad]
-                    lm_damping=12,  # dampening for solver for step jumps
-                    gain=0.5,
-                ),
-                DampingTask(
-                    cost=0.5,  # [cost] * [s] / [rad]
-                ),
-                NullSpacePostureTask(
-                    cost=0.5,
-                    lm_damping=1,
-                    controlled_frames=[
-                        "GR1T2_fourier_hand_6dof_left_hand_pitch_link",
-                        "GR1T2_fourier_hand_6dof_right_hand_pitch_link",
-                    ],
-                    controlled_joints=[
-                        "left_shoulder_pitch_joint",
-                        "left_shoulder_roll_joint",
-                        "left_shoulder_yaw_joint",
-                        "left_elbow_pitch_joint",
-                        "right_shoulder_pitch_joint",
-                        "right_shoulder_roll_joint",
-                        "right_shoulder_yaw_joint",
-                        "right_elbow_pitch_joint",
-                        "waist_yaw_joint",
-                        "waist_pitch_joint",
-                        "waist_roll_joint",
-                    ],
-                ),
-            ],
-            fixed_input_tasks=[],
-            xr_enabled=bool(carb.settings.get_settings().get("/app/xr/enabled")),
-        ),
+        joint_names=[
+            "waist_.*_joint",
+            "left_shoulder_.*_joint",
+            "left_elbow_.*_joint",
+            "left_wrist_.*_joint",
+            "right_shoulder_.*_joint",
+            "right_elbow_.*_joint",
+            "right_wrist_.*_joint",
+        ],
+        scale=0.25,
+        use_default_offset=True,
+    )
+
+    hand_joint_pos = JointPositionActionCfg(
+        asset_name="robot",
+        joint_names=["R_.*", "L_.*"],
+        scale=0.35,
+        use_default_offset=True,
     )
 
 
@@ -258,10 +180,42 @@ class ObservationsCfg:
 
         def __post_init__(self):
             self.enable_corruption = False
-            self.concatenate_terms = False
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class RewardsCfg:
+    """Shaped rewards for RSL-RL (also harmless for teleop / logging)."""
+
+    reach_shape = RewTerm(
+        func=mdp.object_right_eef_distance_exp,
+        params={"eef_link_name": "right_hand_roll_link", "std": 0.30},
+        weight=2.0,
+    )
+    place_xy = RewTerm(
+        func=mdp.object_in_target_xy_exp,
+        params={"target_xy": (0.625, 0.475), "std": 0.25},
+        weight=3.0,
+    )
+    object_still = RewTerm(
+        func=mdp.object_speed_exp,
+        params={"std": 0.35},
+        weight=1.0,
+    )
+    wrist_retract = RewTerm(
+        func=mdp.wrist_retract_exp,
+        params={"link_name": "right_hand_roll_link", "target_max_x": 0.26, "std": 0.12},
+        weight=1.0,
+    )
+    task_success = RewTerm(
+        func=mdp.pick_place_success_reward,
+        params={"task_link_name": "right_hand_roll_link"},
+        weight=100.0,
+    )
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-5)
 
 
 @configclass
@@ -312,7 +266,7 @@ class PickPlaceGR1T2EnvCfg(ManagerBasedRLEnvCfg):
 
     # Unused managers
     commands = None
-    rewards = None
+    rewards: RewardsCfg = RewardsCfg()
     curriculum = None
 
     # Position of the XR anchor in the world frame
@@ -380,15 +334,6 @@ class PickPlaceGR1T2EnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 120  # 120Hz
         self.sim.render_interval = 2
 
-        # Convert USD to URDF and change revolute joints to fixed
-        temp_urdf_output_path, temp_urdf_meshes_output_path = ControllerUtils.convert_usd_to_urdf(
-            self.scene.robot.spawn.usd_path, self.temp_urdf_dir, force_conversion=True
-        )
-
-        # Set the URDF and mesh paths for the IK controller
-        self.actions.upper_body_ik.controller.urdf_path = temp_urdf_output_path
-        self.actions.upper_body_ik.controller.mesh_path = temp_urdf_meshes_output_path
-
         self.teleop_devices = DevicesCfg(
             devices={
                 "handtracking": OpenXRDeviceCfg(
@@ -398,7 +343,7 @@ class PickPlaceGR1T2EnvCfg(ManagerBasedRLEnvCfg):
                             # number of joints in both hands
                             num_open_xr_hand_joints=2 * self.NUM_OPENXR_HAND_JOINTS,
                             sim_device=self.sim.device,
-                            hand_joint_names=self.actions.upper_body_ik.hand_joint_names,
+                            hand_joint_names=[],
                         ),
                     ],
                     sim_device=self.sim.device,
@@ -410,7 +355,7 @@ class PickPlaceGR1T2EnvCfg(ManagerBasedRLEnvCfg):
                             enable_visualization=True,
                             num_open_xr_hand_joints=2 * 26,
                             sim_device=self.sim.device,
-                            hand_joint_names=self.actions.upper_body_ik.hand_joint_names,
+                            hand_joint_names=[],
                         ),
                     ],
                     sim_device=self.sim.device,

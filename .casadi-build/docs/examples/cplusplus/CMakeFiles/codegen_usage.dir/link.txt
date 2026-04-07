@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC  -O3 -DNDEBUG CMakeFiles/codegen_usage.dir/codegen_usage.cpp.o -o ../../../bin/codegen_usage  -Wl,-rpath,/home/nathan/IsaacLab/.casadi-build/lib ../../../lib/libcasadi.so.3.7 -ldl 

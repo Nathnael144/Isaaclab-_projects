@@ -15,6 +15,7 @@ from isaaclab.envs.mdp.actions.rmpflow_actions_cfg import RMPFlowActionCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.sensors import ContactSensorCfg, FrameTransformerCfg
@@ -112,7 +113,8 @@ class ObservationsCfg:
 
         def __post_init__(self):
             self.enable_corruption = False
-            self.concatenate_terms = False
+            # RSL-RL ActorCritic requires 1D (vector) observations.
+            self.concatenate_terms = True
 
     @configclass
     class SubtaskCfg(ObsGroup):
@@ -170,6 +172,52 @@ class TerminationsCfg:
 
 
 @configclass
+class RewardsCfg:
+    """Reward terms for RL training (Toy2Box)."""
+
+    # Reach end-effector toward toy
+    reach_toy = RewTerm(
+        func=place_mdp.ee_to_object_distance_exp,
+        weight=1.0,
+        params={
+            "ee_frame_cfg": SceneEntityCfg("ee_frame"),
+            "object_cfg": SceneEntityCfg("toy_truck"),
+            "std": 0.20,
+        },
+    )
+
+    # Encourage grasp (uses pose+contact/gripper heuristics in object_grasped)
+    grasped = RewTerm(
+        func=place_mdp.object_grasped,
+        weight=2.0,
+        params={
+            "robot_cfg": SceneEntityCfg("robot"),
+            "ee_frame_cfg": SceneEntityCfg("ee_frame"),
+            "object_cfg": SceneEntityCfg("toy_truck"),
+            "diff_threshold": 0.06,
+            "force_threshold": 1.0,
+        },
+    )
+
+    # Move toy toward box (XY)
+    toy_to_box_xy = RewTerm(
+        func=place_mdp.object_a_to_object_b_xy_exp,
+        weight=4.0,
+        params={"object_a_cfg": SceneEntityCfg("toy_truck"), "object_b_cfg": SceneEntityCfg("box"), "std": 0.25},
+    )
+
+    # Sparse terminal success bonus (same predicate as termination)
+    success = RewTerm(
+        func=place_mdp.toy2box_success,
+        weight=100.0,
+        params={"robot_cfg": SceneEntityCfg("robot"), "toy_cfg": SceneEntityCfg("toy_truck"), "box_cfg": SceneEntityCfg("box")},
+    )
+
+    # Regularize actions slightly
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1.0e-5)
+
+
+@configclass
 class PlaceToy2BoxEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the stacking environment."""
 
@@ -183,7 +231,7 @@ class PlaceToy2BoxEnvCfg(ManagerBasedRLEnvCfg):
 
     # Unused managers
     commands = None
-    rewards = None
+    rewards: RewardsCfg = RewardsCfg()
     events = None
     curriculum = None
 
@@ -315,14 +363,9 @@ class RmpFlowAgibotPlaceToy2BoxEnvCfg(PlaceToy2BoxEnvCfg):
             ],
         )
 
-        # add contact force sensor for grasped checking
-        self.scene.contact_grasp = ContactSensorCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/right_.*_Pad_Link",
-            update_period=0.05,
-            history_length=6,
-            debug_vis=True,
-            filter_prim_paths_expr=["{ENV_REGEX_NS}/ToyTruck"],
-        )
+        # NOTE: Disable contact sensor by default for RL training stability across many envs.
+        # The grasp predicate in `place_mdp.object_grasped` will fall back to pose-diff + gripper state.
+        self.scene.contact_grasp = None
 
         self.teleop_devices = DevicesCfg(
             devices={
